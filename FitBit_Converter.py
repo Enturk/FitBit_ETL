@@ -67,14 +67,15 @@ class Hour:
         self.ActivityHour = date_time
         self.StepTotal = StepTotal
 
-
 Verbose = True
-format_data = "REDCap Column Format.csv"
-existing_data = ""
-daily_data = "dailyIntensities_merged.csv"
-hourly_data = "hourlySteps_merged.csv"
+format_file = "REDCap Column Format.csv"
+existing_file = "Existing_data.csv"
+daily_file = "dailyIntensities_merged.csv"
+hourly_file = "hourlySteps_merged.csv"
 script_dir = os.getcwd()
 def CSVtolist(filename):
+    # if output has ï»¿ at the start of the first entry, format is UTF-8-BOM
+    # see this: https://stackoverflow.com/questions/24568056/rs-read-csv-prepending-1st-column-name-with-junk-text
     if os.path.exists(os.path.join(script_dir, filename)):
         input_file = os.path.join(script_dir, filename)
         if Verbose:
@@ -83,18 +84,44 @@ def CSVtolist(filename):
         print(f'Fatal Error: file not found: {filename}')
         exit()
     with open(filename, 'r') as csvfile:
-        return list(csv.reader(csvfile))
+        return_list = list(csv.reader(csvfile))
+        isBOM = 0
+        if type(return_list[0]) != list:
+            if return_list[0][:3] == 'ï»¿':
+                isBOM = 1
+        elif type(return_list[0][0]) != list:
+            if return_list[0][0][:3] == 'ï»¿':
+                isBOM = 2
+        else:
+            isBOM = 3
+    if isBOM > 0:
+        print(f'CSV file is in UTF-8-BOM format. Fixing...')
+        if isBOM == 1:
+            return_list[0] = return_list[0][3:]
+        elif isBOM == 2:
+            return_list[0][0] = return_list[0][0][3:]
+        else:
+            print('List may have more than two dimensions, or something else is the matter:')
+            print(return_list[0])
+    return return_list
 
 subjects = []
+subject_names = []
 # get existing data
+current_data = CSVtolist(existing_file)
+if Verbose:
+    print(current_data[:3])
+##for row in curent_data:
+##    if row[0] in subject_names:
+        
 # get daily data
 # get hourly data
 # transform it
 # output csv for REDCap upload
-columns = CSVtolist(format_data) # get from format file
+columns = CSVtolist(format_file) # get from format file
 if Verbose:
     print("Columns are:")
-    print(columns)
+    print(columns[:3])
 df = pd.DataFrame(columns)
 i=0
 for subject in subjects:

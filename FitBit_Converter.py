@@ -39,7 +39,7 @@ def validate(date_text, context, time_format = '%m/%d/%Y'):
         logging.error(f"Incorrect data format, should be {time_format}", exc_info=True)
         logging.error(context)
         return -1
-    return datetime.datetime.strptime(date_text, '%m/%d/%Y')
+    return datetime.datetime.strptime(date_text, time_format)
 
 def difference_days(earlydate, latedate):
     earlydate = datetime.strptime(earlydate)
@@ -100,7 +100,7 @@ class Subject_Record:
         else:
             logging.info(f'Subject {self.name} has no week numbered {number}.')
             return -1
-        
+    # https://stackoverflow.com/questions/8142364/how-to-compare-two-dates
     def get_week_by_date(self, date):
         if len(self.weeks) == 0:
             logging.info(f'Subject {self.name} has no weeks, so none can be provided for the date requested.')
@@ -108,7 +108,7 @@ class Subject_Record:
         prior_week = self.weeks[0]
         for week in self.weeks:
             delta = daet
-            if week.date > date and :
+            if week.date > date and prior_week.date =< date:
                 return prior_week
             else:
                 prior_week = week

@@ -8,21 +8,35 @@ import logging
 Verbose = True
 format_file = "REDCap Column Format.csv"
 existing_file = "Existing_data.csv"
+existing_time_format = "%m/%d/%Y, %H:%M:%S %p"
 daily_file = "dailyIntensities_merged.csv"
+expected_daily_columns = ['Id',
+                          'ActivityDay',
+                          'SedentaryMinutes',
+                          'LightlyActiveMinutes',
+                          'FairlyActiveMinutes',
+                          'VeryActiveMinutes',
+                          'SedentaryActiveDistance',
+                          'LightActiveDistance',
+                          'ModeratelyActiveDistance',
+                          'VeryActiveDistance']
+daily_time_format = existing_time_format
 hourly_file = "hourlySteps_merged.csv"
+expected_hourly_columns = ['Id','ActivityHour','StepTotal']
+hourly_time_format = existing_time_format
 week_start = 'valid_wk_01'
 second_week = 'valid_wk_02'
 
 ts = time.gmtime()
 timestamp = time.strftime("%Y-%m-%d+%H-%M-%S", ts)
 
-def validate(date_text, context):
+def validate(date_text, context, time_format = '%m/%d/%Y'):
     # validate(date, 'Happened while trying to get the week number from {date} of subject {self.name}')
     try:
-        datetime.datetime.strptime(date_text, '%m/%d/%Y')
+        datetime.datetime.strptime(date_text, time_format)
     except ValueError:
-        raise ValueError("Incorrect data format, should be MM/DD/YYYY")
-        logging.error("Incorrect data format, should be MM/DD/YYYY", exc_info=True)
+        raise ValueError(f "Incorrect data format, should be {time_format}")
+        logging.error(f"Incorrect data format, should be {time_format}", exc_info=True)
         logging.error(context)
         return -1
     return datetime.datetime.strptime(date_text, '%m/%d/%Y')
@@ -33,7 +47,6 @@ def difference_days(earlydate, latedate):
     delta = latedate - earlydate
     return delta.days
 
-#these may be unnecessary:
 def get_event(words):
     if words == 'baseline_arm_1':
         return 0
@@ -50,7 +63,6 @@ def get_event(words):
     elif words == '48_weeks_arm_1':
         return 6
     else: return -1
-
 def get_event_descr(words):
     if words == 0:
         return 'baseline_arm_1'
@@ -79,13 +91,28 @@ class Subject_Record:
         self.weeks = [] # list of Week instances
         
     def get_week_by_number(self, event, number):
+        if len(self.weeks) == 0:
+            logging.info(f'Subject {self.name} has no weeks, so the week requested ({number}) cannot be provided.')
+            return -1
         for weekly in self.weeks:
             if weekly.event == event and weekly.number == number:
                 return weekly
         else:
+            logging.info(f'Subject {self.name} has no week numbered {number}.')
             return -1
+        
     def get_week_by_date(self, date):
-        #FIXME
+        if len(self.weeks) == 0:
+            logging.info(f'Subject {self.name} has no weeks, so none can be provided for the date requested.')
+            return -1
+        prior_week = self.weeks[0]
+        for week in self.weeks:
+            delta = daet
+            if week.date > date and :
+                return prior_week
+            else:
+                prior_week = week
+        logging.info(f'Subject {self.name} has no week that contains the date {date}. The last week examined started on {prior_week.date}.')
         
 class Week:
     # TODO all those weekly parameters, plus all the parameters from the two data files
@@ -218,6 +245,8 @@ for row in current_data:
         subject_names[row[0]] = new_subject
         subject = new_subject
     event = get_event(row[1])
+    if event == -1:
+        
     col = starting_col
     start_date = subject.start_date
     week_num = 0
@@ -247,36 +276,80 @@ for row in current_data:
         logging.debug(f'{week.event}\t{week.number}\t{week.date}\t{week.valid}\t{week.days}\t{week.avg_daily_steps}\t{week.avg_low_intensity}\t{week.avg_moderate_intensity}\t{week.avg_high_intensity}')
     else:
         logging.debug(f'This row for subject {subject.name} has no weekly data: {subject.weeks}')
-        
-# get daily data
+
+#get daily data
+daily_data = CSVtolist(daily_file)
+first_row = True
+daily_columns = []
+subject = subjects[0]
+date = subject.start_date
+for row in daily_data:
+    # check columns:
+    if first_row:
+        first_row = False
+        for column in row:
+            daily_columns.append(column)
+        if daily_columns ! = expected_daily_columns
+            logging.error('Columns in file are {hourly_columns}, and different from those expected, which are {expected_hourly_columns}')
+        continue
+
+    name = int(row[0][3:]) # Removes 'ATX' from name
+    if name != subject.name:
+        if name in subject_names:
+            subject = subject_names[name]
+        else:
+            logging.error(f'New subject {name} not in subject dictionary.')
+            continue
+            # FIXME add new subject
+
+    date = validate(row[1] f'Checking row in daily data: {row}')
+    if date == -1:
+        logging.error(f'Moving on to next row because of bad date')
+        continue
+    SedentaryMinutes = int(row[2])
+    LightlyActiveMinutes = int(row[3])
+    FairlyActiveMinutes = int(row[4])
+    VeryActiveMinutes = int(row[5])
+    SedentaryActiveDistance = int(row[6])
+    LightActiveDistance = float(row[7])
+    ModeratelyActiveDistance = float(row[8])
+    VeryActiveDistance = float(row[9])
+
+    day = Day(date, SedentaryMinutes,LightlyActiveMinutes,FairlyActiveMinutes,VeryActiveMinutes,SedentaryActiveDistance,LightActiveDistance,ModeratelyActiveDistance,VeryActiveDistance)
+    
+    
+# get hourly data
 hourly_data = CSVtolist(hourly_file)
 first_row = True
-expected_hourly_columns = ['Id','ActivityHour','StepTotal']
 hourly_columns = []
 subject = subjects[0]
 date = subject.start_date
 for row in hourly_data:
-    # store the columns to check them later:
+    # check columns:
     if first_row:
         first_row = False
         for column in row:
             hourly_columns.append(column)
-
-        # check data
         if hourly_columns ! = expected_hourly_columns
             logging.error('Columns in file are {hourly_columns}, and different from those expected, which are {expected_hourly_columns}')
-                
         continue
 
-    # identify if new or not
-    if row[0] != subject.name:
-        if row[0] in subject_names:
-            subject = subject_names[row[0]]
+    # identify if new subject
+    name = row[0]
+    if name != subject.name:
+        if name in subject_names:
+            subject = subject_names[name]
         else:
-            logging.error(f'New subject {row[0]} not in subject dictionary.'
-    
-    
-# get hourly data
+            logging.error(f'New subject {name} not in subject dictionary.')
+            # FIXME add new subject
+
+    date_time = validate(row[1], f'Checking row in hourly data: {row}', hourly_time_format)
+    steps = row[2]
+
+    # identify if new day
+    # day = subject.weeks[-1].days[-1].ActivityDay #FIXME
+    # if day != datetime.datetime.st
+        
 # transform it
 # output csv for REDCap upload
 columns = CSVtolist(format_file) # get from format file

@@ -8,7 +8,7 @@ import logging
 Verbose = True
 format_file = "REDCap Column Format.csv"
 existing_file = "Existing_data.csv"
-existing_time_format = "%m/%d/%Y, %H:%M:%S %p"
+existing_time_format = '%m/%d/%Y %H:%M'
 # TODO add expected existing columns
 daily_file = "dailyIntensities_merged.csv"
 expected_daily_columns = ['Id',
@@ -21,10 +21,10 @@ expected_daily_columns = ['Id',
                           'LightActiveDistance',
                           'ModeratelyActiveDistance',
                           'VeryActiveDistance']
-daily_time_format = existing_time_format
+daily_time_format = '%m/%d/%Y %H:%M:%S %p'
 hourly_file = "hourlySteps_merged.csv"
 expected_hourly_columns = ['Id','ActivityHour','StepTotal']
-hourly_time_format = existing_time_format
+hourly_time_format = daily_time_format
 # TODO add expected hourly columns
 week_start = 'valid_wk_01'
 second_week = 'valid_wk_02'
@@ -34,6 +34,8 @@ timestamp = time.strftime("%Y-%m-%d+%H-%M-%S", ts)
 
 def validate(date_text, context, time_format = '%m/%d/%Y'):
     # validate(date, 'Happened while trying to get the week number from {date} of subject {self.name}')
+    if type(date_text) == datetime.datetime:
+        return(date_text)
     try:
         datetime.datetime.strptime(date_text, time_format)
     except ValueError:
@@ -102,7 +104,6 @@ class Subject_Record:
             week_numbers[week.number] = week
         week_numbers = sorted(week_numbers)
         self.weeks = []
-        
         for i in range(max_week_num):
             if i in week_numbers:
                 self.weeks.append(week_numbers[i])
@@ -121,12 +122,13 @@ class Subject_Record:
             return -1
 
     def get_week_by_date(self, date):
-        date = validate(date)
+        date = validate(date, f'Was trying to get week with date for subject {self.name}')
         if len(self.weeks) == 0:
             logging.info(f'Subject {self.name} has no weeks, so none can be provided for the date requested.')
             return -1
         for week in self.weeks:
-            delta = difference_days(week.date, date)
+            logging.debug(f'Looking for week in subject {subject}. Currently on week {week.number}, which started on {week.date}')
+            delta = int(difference_days(week.date, date))
             if delta >= 0 and delta < 7:
                 return week
         logging.info(f'Subject {self.name} has no week that contains the date {date}. The last week examined started on {prior_week.date}.')
@@ -146,6 +148,15 @@ class Week:
         self.avg_moderate_intensity = moderate
         self.avg_high_intensity = high
 
+    def get_day_by_date(self, date):
+        date = validate(date, f'Was trying to get day of week with date for week starting on {self.date}')
+        if len(self.days) == 0:
+            return -1
+        for day in self.days:
+            if date == day.ActivityDay:
+                return day
+        return -1
+
 class Day:
     # SedentaryMinutes	LightlyActiveMinutes	FairlyActiveMinutes	VeryActiveMinutes	SedentaryActiveDistance	LightActiveDistance	ModeratelyActiveDistance	VeryActiveDistance
     def __init__(self, date, SedentaryMinutes,LightlyActiveMinutes,FairlyActiveMinutes,VeryActiveMinutes,SedentaryActiveDistance,LightActiveDistance,ModeratelyActiveDistance,VeryActiveDistance):
@@ -158,8 +169,18 @@ class Day:
         self.LightActiveDistanceself = LightActiveDistanceself
         self.ModeratelyActiveDistance = ModeratelyActiveDistance
         self.VeryActiveDistance = VeryActiveDistance
-        self.hours = [] # list of Hour instances
+        self.hours = {} # dict of Hours
 
+    def add_hour(self, date, steps):
+        date = validate(date, 'Was trying to get hour for day {self.ActivityDay} from date.')
+        this_hour = date.hour
+        if this_hour in self.hours:
+            logging.error(f'Day {self.ActivityDay} for this subject already has activity for hour {this_hour}')
+            return -1
+        else:
+            self.hours[this_hour] = steps
+            return this_hour
+#unused
 class Hour:
     def __init__(self, date_time, StepTotal):
         self.ActivityHour = date_time
@@ -290,14 +311,14 @@ for row in current_data:
 
     logging.debug(f'Last processed column was {col} and we got to week {week_num}')
 
-    if len(subject.weeks) > 0:
-        logging.debug(f"First and last week of subject {subject.name}'s weekly records (event, week number, start date, validity, valid days, number of steps, and low, moderate and high intensity):")
-        week = subject.weeks[0]
-        logging.debug(f'{week.event}\t{week.number}\t{week.date}\t{week.valid}\t{week.days}\t{week.avg_daily_steps}\t{week.avg_low_intensity}\t{week.avg_moderate_intensity}\t{week.avg_high_intensity}')
-        week = subject.weeks[-1]
-        logging.debug(f'{week.event}\t{week.number}\t{week.date}\t{week.valid}\t{week.days}\t{week.avg_daily_steps}\t{week.avg_low_intensity}\t{week.avg_moderate_intensity}\t{week.avg_high_intensity}')
-    else:
-        logging.debug(f'This row for subject {subject.name} has no weekly data: {subject.weeks}')
+##    if len(subject.weeks) > 0:
+##        logging.debug(f"First and last week of subject {subject.name}'s weekly records (event, week number, start date, validity, valid days, number of steps, and low, moderate and high intensity):")
+##        week = subject.weeks[0]
+##        logging.debug(f'{week.event}\t{week.number}\t{week.date}\t{week.valid}\t{week.days}\t{week.avg_daily_steps}\t{week.avg_low_intensity}\t{week.avg_moderate_intensity}\t{week.avg_high_intensity}')
+##        week = subject.weeks[-1]
+##        logging.debug(f'{week.event}\t{week.number}\t{week.date}\t{week.valid}\t{week.days}\t{week.avg_daily_steps}\t{week.avg_low_intensity}\t{week.avg_moderate_intensity}\t{week.avg_high_intensity}')
+##    else:
+##        logging.debug(f'This row for subject {subject.name} has no weekly data: {subject.weeks}')
 
 for subject in subjects:
     subject.sort_weeks()
@@ -353,7 +374,6 @@ hourly_data = CSVtolist(hourly_file)
 first_row = True
 hourly_columns = []
 subject = subjects[0]
-date = subject.start_date
 for row in hourly_data:
     # check columns:
     if first_row:
@@ -372,14 +392,29 @@ for row in hourly_data:
         else:
             logging.error(f'New subject {name} not in subject dictionary.')
             # FIXME add new subject
-
+    
     date_time = validate(row[1], f'Checking row in hourly data: {row}', hourly_time_format)
+    week = subject.get_week_by_date(date_time)
+    if week == -1:
+        logging.debug(f'Subject {subject} has no week containing {date_time}')
+        #FIXME add new week
+        continue # remove when fixed
+    day = week.get_day_by_date(date_time)
+    if day == -1:
+        logging.debug(f'Subject {subject} has no day for {date_time}')
+        #FIXME add new week
+        continue # remove when fixed
+    
     steps = row[2]
 
-    # identify if new day
+    # identify new day unnecessary?
     # day = subject.weeks[-1].days[-1].ActivityDay #FIXME
-    # if day != datetime.datetime.st
-        
+    # if day != 
+
+    new_hour = day.add_hour(date_time, steps)
+    if new_hour == -1:
+        logging.error(f'Duplicate hour for subject {subject}')
+    
 # transform it
 # output csv for REDCap upload
 columns = CSVtolist(format_file) # get from format file
@@ -396,3 +431,6 @@ for subject in subjects:
     df.loc[i] = row
     i+=1
 # save as 'FitBitData_Converted_' + timestamp
+
+
+# TODO optionally, save all data that was taken in, including hourly data

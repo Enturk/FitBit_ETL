@@ -9,6 +9,7 @@ Verbose = True
 format_file = "REDCap Column Format.csv"
 existing_file = "Existing_data.csv"
 existing_time_format = "%m/%d/%Y, %H:%M:%S %p"
+# TODO add expected existing columns
 daily_file = "dailyIntensities_merged.csv"
 expected_daily_columns = ['Id',
                           'ActivityDay',
@@ -24,6 +25,7 @@ daily_time_format = existing_time_format
 hourly_file = "hourlySteps_merged.csv"
 expected_hourly_columns = ['Id','ActivityHour','StepTotal']
 hourly_time_format = existing_time_format
+# TODO add expected hourly columns
 week_start = 'valid_wk_01'
 second_week = 'valid_wk_02'
 
@@ -35,15 +37,15 @@ def validate(date_text, context, time_format = '%m/%d/%Y'):
     try:
         datetime.datetime.strptime(date_text, time_format)
     except ValueError:
-        raise ValueError(f "Incorrect data format, should be {time_format}")
+        raise ValueError(f"Incorrect data format, should be {time_format}")
         logging.error(f"Incorrect data format, should be {time_format}", exc_info=True)
         logging.error(context)
         return -1
     return datetime.datetime.strptime(date_text, time_format)
 
 def difference_days(earlydate, latedate):
-    earlydate = datetime.strptime(earlydate)
-    latedate = datetime.strptime(latedate)
+    earlydate = validate(earlydate, 'Calculating difference in days between {earlydate} and {latedate}')
+    latedate = validate(latedate, 'Calculating difference in days between {earlydate} and {latedate}')
     delta = latedate - earlydate
     return delta.days
 
@@ -90,6 +92,23 @@ class Subject_Record:
         self.multiple_devices = multiple_devices
         self.weeks = [] # list of Week instances
         
+    def sort_weeks(self):
+        max_week_num = 0
+        # TODO sort by event type
+        week_numbers = {}
+        for week in self.weeks:
+            if week.number > max_week_num:
+                max_week_num = week.number
+            week_numbers[week.number] = week
+        week_numbers = sorted(week_numbers)
+        self.weeks = []
+        
+        for i in range(max_week_num):
+            if i in week_numbers:
+                self.weeks.append(week_numbers[i])
+            else:
+                self.weeks.append(-1) # missing week
+        
     def get_week_by_number(self, event, number):
         if len(self.weeks) == 0:
             logging.info(f'Subject {self.name} has no weeks, so the week requested ({number}) cannot be provided.')
@@ -100,26 +119,25 @@ class Subject_Record:
         else:
             logging.info(f'Subject {self.name} has no week numbered {number}.')
             return -1
-    # https://stackoverflow.com/questions/8142364/how-to-compare-two-dates
+
     def get_week_by_date(self, date):
+        date = validate(date)
         if len(self.weeks) == 0:
             logging.info(f'Subject {self.name} has no weeks, so none can be provided for the date requested.')
             return -1
-        prior_week = self.weeks[0]
         for week in self.weeks:
-            delta = daet
-            if week.date > date and prior_week.date =< date:
-                return prior_week
-            else:
-                prior_week = week
+            delta = difference_days(week.date, date)
+            if delta >= 0 and delta < 7:
+                return week
         logging.info(f'Subject {self.name} has no week that contains the date {date}. The last week examined started on {prior_week.date}.')
+        return -1
         
 class Week:
     # TODO all those weekly parameters, plus all the parameters from the two data files
     def __init__(self, date, number, event, valid, days, steps, low, moderate, high):
         self.date = date  # date it begins on
         self.number = number
-        self.event = event # i.e. baseline, or '8_weeks_arm_1' etc.
+        self.event = event # meaning baseline or 8_weeks_arm_1 etc.
         self.days = [] # list of Day instances
         self.valid = valid
         self.days = days
@@ -184,25 +202,27 @@ if Verbose:
 else:
     logging.basicConfig(filename='fitbit_pipe.log', filemode='a', format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
 
-
+# get existing data
 subjects = []
 subject_names = {}
-# get existing data
 current_data = CSVtolist(existing_file)
 logging.debug(current_data[:3])
-
 first_row = True
 current_columns = []
 col = 0
 starting_col = 8
 weekly_cols = 6
 for row in current_data:
-
-    # store the columns to check them later:
+    # check columns:
     if first_row:
         first_row = False
         for column in row:
             current_columns.append(column)
+
+        # TODO validate columns
+##        if current_columns ! = expected_daily_columns
+##            logging.error('Columns in file are {hourly_columns}, and different from those expected, which are {expected_hourly_columns}')
+##            break # TODO adapt to new columns
         
         # check weekly starting place
         for column in current_columns:
@@ -244,9 +264,11 @@ for row in current_data:
         new_subject = Subject_Record(row[0], date, row[7])
         subject_names[row[0]] = new_subject
         subject = new_subject
+        subjects.append(subject)
     event = get_event(row[1])
     if event == -1:
-        
+        logging.error(f'Skipping row because it contains improper event: {row[1]}')
+        continue
     col = starting_col
     start_date = subject.start_date
     week_num = 0
@@ -277,7 +299,11 @@ for row in current_data:
     else:
         logging.debug(f'This row for subject {subject.name} has no weekly data: {subject.weeks}')
 
+for subject in subjects:
+    subject.sort_weeks()
+
 #get daily data
+logging.debug(f'Starting with new daily data. We have {len(subjects)} subjects from existing data.')
 daily_data = CSVtolist(daily_file)
 first_row = True
 daily_columns = []
@@ -289,10 +315,12 @@ for row in daily_data:
         first_row = False
         for column in row:
             daily_columns.append(column)
-        if daily_columns ! = expected_daily_columns
-            logging.error('Columns in file are {hourly_columns}, and different from those expected, which are {expected_hourly_columns}')
+        if daily_columns != expected_daily_columns:
+            logging.critical('Columns in file are {hourly_columns}, and different from those expected, which are {expected_hourly_columns}')
+            break # TODO adapt to new columns
         continue
-
+    
+    logging.debug(f'Daily row is {row}')
     name = int(row[0][3:]) # Removes 'ATX' from name
     if name != subject.name:
         if name in subject_names:
@@ -301,8 +329,9 @@ for row in daily_data:
             logging.error(f'New subject {name} not in subject dictionary.')
             continue
             # FIXME add new subject
+            # Do this next!
 
-    date = validate(row[1] f'Checking row in daily data: {row}')
+    date = validate(row[1], 'Checking row in daily data:' + str(row))
     if date == -1:
         logging.error(f'Moving on to next row because of bad date')
         continue
@@ -316,7 +345,8 @@ for row in daily_data:
     VeryActiveDistance = float(row[9])
 
     day = Day(date, SedentaryMinutes,LightlyActiveMinutes,FairlyActiveMinutes,VeryActiveMinutes,SedentaryActiveDistance,LightActiveDistance,ModeratelyActiveDistance,VeryActiveDistance)
-    
+    week = get_week_by_date(date)
+    week.days.append(day)
     
 # get hourly data
 hourly_data = CSVtolist(hourly_file)
@@ -330,7 +360,7 @@ for row in hourly_data:
         first_row = False
         for column in row:
             hourly_columns.append(column)
-        if hourly_columns ! = expected_hourly_columns
+        if hourly_columns != expected_hourly_columns:
             logging.error('Columns in file are {hourly_columns}, and different from those expected, which are {expected_hourly_columns}')
         continue
 

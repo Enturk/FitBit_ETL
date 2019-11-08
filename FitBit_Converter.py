@@ -67,20 +67,20 @@ def get_event(words):
     elif words == '48_weeks_arm_1':
         return 6
     else: return -1
-def get_event_descr(words):
-    if words == 0:
+def get_event_descr(number):
+    if number == 0:
         return 'baseline_arm_1'
-    elif words == 1:
+    elif number == 1:
         return '8_weeks_arm_1'
-    elif words == 2:
+    elif number == 2:
         return '16_weeks_arm_1'
-    elif words == 3:
+    elif number == 3:
         return '24_weeks_arm_1'
-    elif words == 4:
+    elif number == 4:
         return '32_weeks_arm_1'
-    elif words == 5:
+    elif number == 5:
         return '40_weeks_arm_1'
-    elif words == 6:
+    elif number == 6:
         return '48_weeks_arm_1'
     else: return -1
 
@@ -89,11 +89,17 @@ class Subject_Record:
     def __init__(self, name, date, multiple_devices):
         self.name = name
         # The start date for each subject is the "date" field from the "Clinical Exam" instrument + 1 day.
-        self.start_date = date
-        self.end_date = date + datetime.timedelta(days = 363)
+        self.start_date = validate(date, f"Creation of new subject {self.name}"
+        self.end_date = self.start_date + datetime.timedelta(days = 363)
         self.multiple_devices = multiple_devices
         self.weeks = [] # list of Week instances
+        for i in range(52):
+            new_date = 
+            self.add_week(
+
+    def add_week(self, date, *kwargs):
         
+    
     def sort_weeks(self):
         max_week_num = 0
         # TODO sort by event type
@@ -107,10 +113,20 @@ class Subject_Record:
         for i in range(max_week_num):
             if i in week_numbers:
                 self.weeks.append(week_numbers[i])
-            else:
-                self.weeks.append(-1) # missing week
+            else: # add missing week
+                if i == 0:
+                    date = self.start_date
+                    event = 0
+                else:
+                    date = self.weeks[-1].date + timedelta(days=7)
+                    event = 0 #self.weeks[-1].event # FIXME this needs to be reviewed when adding new events
+                new_week = Week(date, i, event, 0, 0, 0.0, 0.0, 0.0, 0.0)
+                self.weeks.append(new_week) 
         
     def get_week_by_number(self, event, number):
+        if number < 0 or number > 51:
+            logging.error(f"Weeks are numbered between 0 and 51, and {number} isn't in that range.")
+            return -1
         if len(self.weeks) == 0:
             logging.info(f'Subject {self.name} has no weeks, so the week requested ({number}) cannot be provided.')
             return -1
@@ -127,17 +143,18 @@ class Subject_Record:
             logging.info(f'Subject {self.name} has no weeks, so none can be provided for the date requested.')
             return -1
         for week in self.weeks:
-            logging.debug(f'Looking for week in subject {subject}. Currently on week {week.number}, which started on {week.date}')
+            # logging.debug(f'Looking for week in subject {self.name}. Currently on week {week}, for {date}')
             delta = int(difference_days(week.date, date))
             if delta >= 0 and delta < 7:
                 return week
-        logging.info(f'Subject {self.name} has no week that contains the date {date}. The last week examined started on {prior_week.date}.')
-        return -1
+        logging.info(f'Subject {self.name} has no week that contains the date {date}.')
+        self.sort_weeks()
+        return get_week_by_date(self, date)
         
 class Week:
     # TODO all those weekly parameters, plus all the parameters from the two data files
     def __init__(self, date, number, event, valid, days, steps, low, moderate, high):
-        self.date = date  # date it begins on
+        self.date = validate(date, f'Creating new week with {date}', '%m/%d/%Y')# date it begins on
         self.number = number
         self.event = event # meaning baseline or 8_weeks_arm_1 etc.
         self.days = [] # list of Day instances
@@ -153,20 +170,21 @@ class Week:
         if len(self.days) == 0:
             return -1
         for day in self.days:
+            logging.debug(f'Trying to get a day by date in week {self.number}, starting on {self.date}, is looking at day {day}, which is type {type(day)}')
             if date == day.ActivityDay:
                 return day
         return -1
 
-class Day:
+class Activity_Day:
     # SedentaryMinutes	LightlyActiveMinutes	FairlyActiveMinutes	VeryActiveMinutes	SedentaryActiveDistance	LightActiveDistance	ModeratelyActiveDistance	VeryActiveDistance
     def __init__(self, date, SedentaryMinutes,LightlyActiveMinutes,FairlyActiveMinutes,VeryActiveMinutes,SedentaryActiveDistance,LightActiveDistance,ModeratelyActiveDistance,VeryActiveDistance):
-        self.ActivityDay = date
+        self.ActivityDay = validate(date, f'Creating new day dated {date}', daily_time_format)
         self.SedentaryMinutes = SedentaryMinutes
         self.LightlyActiveMinutes = LightlyActiveMinutes
         self.FairlyActiveMinutes = FairlyActiveMinutes
         self.VeryActiveMinutes = VeryActiveMinutes
         self.SedentaryActiveDistance = SedentaryActiveDistance
-        self.LightActiveDistanceself = LightActiveDistanceself
+        self.LightActiveDistanceself = LightActiveDistance
         self.ModeratelyActiveDistance = ModeratelyActiveDistance
         self.VeryActiveDistance = VeryActiveDistance
         self.hours = {} # dict of Hours
@@ -208,14 +226,14 @@ def CSVtolist(filename):
         else:
             isBOM = 3
     if isBOM > 0:
-        logging.debug(f'CSV file is in UTF-8-BOM format. Fixing...')
+        logging.error(f'CSV file is in UTF-8-BOM format. Fixing...')
         if isBOM == 1:
             return_list[0] = return_list[0][3:]
         elif isBOM == 2:
             return_list[0][0] = return_list[0][0][3:]
         else:
-            logging.debug('List may have more than two dimensions, or something else is the matter:')
-            logging.debug(return_list[0])
+            logging.error('List may have more than two dimensions, or something else is the matter:')
+            logging.error(return_list[0])
     return return_list
 
 if Verbose:
@@ -227,7 +245,7 @@ else:
 subjects = []
 subject_names = {}
 current_data = CSVtolist(existing_file)
-logging.debug(current_data[:3])
+# logging.debug(current_data[:3])
 first_row = True
 current_columns = []
 col = 0
@@ -275,17 +293,23 @@ for row in current_data:
     if row[0] in subject_names:
         this_subject = subject_names[row[0]]
         subject = this_subject
-        
+        logging.debug(f'Found existing subject {subject.name}')
+        if len(subject.weeks)>0 and row[2] == '':
+            logging.debug('Moving on to next row')
+            continue
     else:
         date = row[5][:-5]
         if date == '':
             continue
         logging.debug(f'The date is {date}')
         date = validate(date, 'Happened while trying to get the week number from {date} of subject {self.name}')
-        new_subject = Subject_Record(row[0], date, row[7])
-        subject_names[row[0]] = new_subject
-        subject = new_subject
-        subjects.append(subject)
+        name = row[0]
+        multi_fitbits = row[7]
+        new_subject = Subject_Record(name, date, multi_fitbits)
+        logging.debug(f'New subject is {new_subject.name}')
+        subject_names[name] = new_subject # add to dictionary
+        subject = new_subject # update current subject
+        subjects.append(subject) # add new subject to list of subjects
     event = get_event(row[1])
     if event == -1:
         logging.error(f'Skipping row because it contains improper event: {row[1]}')
@@ -298,6 +322,7 @@ for row in current_data:
         number = week_num +1
         valid = row[col]
         if valid == '':
+            logging.debug(f'At week number {week_num}, this row has no data for subject {subject.name}')
             break
         days = row[col +1]
         steps = row[col +2]
@@ -309,8 +334,11 @@ for row in current_data:
         week_num += 1
         col += weekly_cols
 
-    logging.debug(f'Last processed column was {col} and we got to week {week_num}')
-
+    # FIXME tracking down bug where days are string types
+    logging.debug(f'For subject {subject.name}, last processed column was {col} and we got to week {week_num}')
+    if subject.name == 'ATX023' and len(subject.weeks) > 0:
+        break
+    
 ##    if len(subject.weeks) > 0:
 ##        logging.debug(f"First and last week of subject {subject.name}'s weekly records (event, week number, start date, validity, valid days, number of steps, and low, moderate and high intensity):")
 ##        week = subject.weeks[0]
@@ -322,6 +350,11 @@ for row in current_data:
 
 for subject in subjects:
     subject.sort_weeks()
+    
+# debug for ATX23
+subject = subject_names['ATX023']
+for week in subject.weeks:
+    logging.debug(f"For {subject.name}, week {week.number}'s date is {week.date}")
 
 #get daily data
 logging.debug(f'Starting with new daily data. We have {len(subjects)} subjects from existing data.')
@@ -342,7 +375,7 @@ for row in daily_data:
         continue
     
     logging.debug(f'Daily row is {row}')
-    name = int(row[0][3:]) # Removes 'ATX' from name
+    name = row[0]
     if name != subject.name:
         if name in subject_names:
             subject = subject_names[name]
@@ -365,10 +398,26 @@ for row in daily_data:
     ModeratelyActiveDistance = float(row[8])
     VeryActiveDistance = float(row[9])
 
-    day = Day(date, SedentaryMinutes,LightlyActiveMinutes,FairlyActiveMinutes,VeryActiveMinutes,SedentaryActiveDistance,LightActiveDistance,ModeratelyActiveDistance,VeryActiveDistance)
-    week = get_week_by_date(date)
-    week.days.append(day)
-    
+    new_day = Activity_Day(date, SedentaryMinutes,LightlyActiveMinutes,FairlyActiveMinutes,VeryActiveMinutes,SedentaryActiveDistance,LightActiveDistance,ModeratelyActiveDistance,VeryActiveDistance)
+    logging.debug(f'New day is {new_day}, and to make it I fed it {date, SedentaryMinutes,LightlyActiveMinutes,FairlyActiveMinutes,VeryActiveMinutes,SedentaryActiveDistance,LightActiveDistance,ModeratelyActiveDistance,VeryActiveDistance}')
+    if type(new_day) == str:
+        logging.debug(f'That day is a string.')
+        exit()
+    week = subject.get_week_by_date(date)
+    logging.debug(f'Week is {week}.')
+    week.days.append(new_day)
+
+# debugging days that are strings
+##days = 0
+##string_days = 0
+##for subject in subjects:
+##    for week in subject.weeks:
+##        for day in week.days:
+##            days += 1
+##            if type(day) == str:
+##                string_days += 1
+##logging.debug(f'Out of {days} days, {string_days} are strings.')
+
 # get hourly data
 hourly_data = CSVtolist(hourly_file)
 first_row = True
@@ -402,7 +451,7 @@ for row in hourly_data:
     day = week.get_day_by_date(date_time)
     if day == -1:
         logging.debug(f'Subject {subject} has no day for {date_time}')
-        #FIXME add new week
+        #FIXME add new day
         continue # remove when fixed
     
     steps = row[2]

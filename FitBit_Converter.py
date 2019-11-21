@@ -178,7 +178,7 @@ class Week:
         for i in range(7):
             new_day = Day(new_date)
             # logging.debug(f'Trying to add day {i} to list {dicto} of type {type(dicto)} of week {number}. Date is {new_date} of type {type(new_date)}, and it refers to day {new_day} of type {type(new_day)}')
-            dicto[new_date] = new_day 
+            dicto[new_date] = new_day
             new_date = new_date + datetime.timedelta(days=1)
         self.days = dicto # dictionary of Day instances where key is date
 
@@ -313,7 +313,9 @@ for row in current_data:
         subjects[name] = subject
         logging.debug(f'Created new frameworkd to hold data for {subject.name}')
 
-    if subject.end_date != end_date:
+    end_date = validate(end_date, f"Checking the end date for subject {subject.name}", existing_time_format)
+    date_delta = difference_days(subject.end_date, end_date)
+    if date_delta != 0:
         logging.error(f"End date {subject.end_date} for subject {subject.name} doesn't match that in row: {end_date}")
         subject.end_date = end_date
 
@@ -346,8 +348,8 @@ for row in daily_data:
 
     logging.debug(f'Daily row is {row}')
     name = row[0]
-    if name in subject_names:
-        subject = subject_names[name]
+    if name in subjects:
+        subject = subjects[name]
     else:
         logging.critical(f'New subject {name} not in subject dictionary.')
         continue

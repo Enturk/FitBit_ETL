@@ -121,7 +121,8 @@ class Subject_Record:
             return -1
         week = self.get_week_by_date(date)
         day_num = int(delta%7)
-        day = week.days[day_num]
+        logging.debug(f"Trying to get day of week {week.number} for subject {self.name}, and looking for day {day_num} of that week, since we're looking for {date} and day zero was {self.start_date}")
+        day = week.get_day_by_date(date)
         return day
 
     def update_week(self, date, **kwargs):

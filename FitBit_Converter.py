@@ -98,7 +98,7 @@ class Subject_Record:
         self.weeks = {} # dict of Week instances
         new_date = self.start_date
         for i in range(52):
-            week = Week(new_date, i) 
+            week = Week(new_date, i)
             self.weeks[i] = week
             new_date = new_date + datetime.timedelta(days=7) # add seven days
 
@@ -113,7 +113,7 @@ class Subject_Record:
             return -1
         week_num = int(delta/7)
         return self.weeks[week_num]
-        
+
     def get_day_by_date(self, date):
         delta = difference_days(self.start_date, date)
         if delta > 52*7 or delta < 0:
@@ -126,7 +126,7 @@ class Subject_Record:
 
     def update_week(self, date, **kwargs):
         week = self.get_week_by_date(date)
-        for key, value in kwargs.items(): 
+        for key, value in kwargs.items():
             if key == 'event':
                 self.event = value
             elif key == 'valid':
@@ -150,14 +150,13 @@ class Week:
         self.date = validate(date, f'Creating new week with {date}', '%m/%d/%Y')# date it begins on
         self.number = number # week number
         self.event = event_arm # meaning baseline or 8_weeks_arm_1 etc.
-        self.days = {} # list of Day instances where key is date
         self.valid = 0 # whether the week had at least 4 days of valid steps
         self.days = 0
         self.avg_daily_steps = 0.0
         self.avg_low_intensity = 0.0
         self.avg_moderate_intensity = 0.0
         self.avg_high_intensity = 0.0
-        for key, value in kwargs.items(): 
+        for key, value in kwargs.items():
             if key == 'event':
                 self.event = value
             elif key == 'valid':
@@ -175,12 +174,13 @@ class Week:
             else:
                 logging.error(f'Bad kwarg when making new week (key, value): {key}, {value}')
         new_date = self.date
+        dicto = {}
         for i in range(7):
-            logging.debug(f'Trying to add day {i} to week {number}. Date is {new_date} of type {type(new_date)}')
             new_day = Day(new_date)
-            # TODO get text date from new_date, maybe?
-            self.days[new_date] = new_day # ERROR is here
-            new_day = new_date + datetime.timedelta(days=1)
+            # logging.debug(f'Trying to add day {i} to list {dicto} of type {type(dicto)} of week {number}. Date is {new_date} of type {type(new_date)}, and it refers to day {new_day} of type {type(new_day)}')
+            dicto[new_date] = new_day 
+            new_date = new_date + datetime.timedelta(days=1)
+        self.days = dicto # dictionary of Day instances where key is date
 
     # not sure if used
     def get_day_by_date(self, date):
@@ -206,7 +206,7 @@ class Day:
         self.ModeratelyActiveDistance = 0
         self.VeryActiveDistance = 0
         self.hours = {} # dict of Hourly steps
-        for key, value in kwargs.items(): 
+        for key, value in kwargs.items():
             if key == 'SedentaryMinutes':
                 self.SedentaryMinutes = value
             elif key == 'LightlyActiveMinutes':
@@ -230,7 +230,7 @@ class Day:
 ##            self.hours[i] = new_hour
 
     def update(self, **kwargs):
-        for key, value in kwargs.items(): 
+        for key, value in kwargs.items():
             if key == 'SedentaryMinutes':
                 self.SedentaryMinutes = value
             elif key == 'LightlyActiveMinutes':
@@ -274,7 +274,7 @@ for row in current_data:
 ##        if current_columns ! = expected_daily_columns
 ##            logging.error('Columns in file are {hourly_columns}, and different from those expected, which are {expected_hourly_columns}')
 ##            break # TODO adapt to new columns
-        
+
         # check weekly starting place
         for column in current_columns:
             if column == week_start:
@@ -343,7 +343,7 @@ for row in daily_data:
             logging.critical('Columns in file are {hourly_columns}, and different from those expected, which are {expected_hourly_columns}')
             break # TODO adapt to new columns
         continue
-    
+
     logging.debug(f'Daily row is {row}')
     name = row[0]
     if name in subject_names:
@@ -376,7 +376,7 @@ for row in hourly_data:
             logging.critical('Columns in file are {hourly_columns}, and different from those expected, which are {expected_hourly_columns}')
             break # TODO adapt to new columns
         continue
-    
+
     logging.debug(f'Hourly row is {row}')
     name = row[0]
     if name != subject.name:
@@ -386,7 +386,7 @@ for row in hourly_data:
             logging.critical(f'New subject {name} not in subject dictionary.')
             continue
             # FIXME add new subject
-    
+
     date = validate(row[1], f'Trying to get date from hourly data', hourly_time_format)
     hour_number = date.hour
     day = subject.get_day_by_date(date)

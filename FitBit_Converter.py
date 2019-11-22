@@ -188,10 +188,11 @@ class Week:
         date = validate(date, f'Was trying to get day of week with date for week starting on {self.date}')
         if len(self.days) == 0:
             return -1
-        for diem in self.days:
-            logging.debug(f'Trying to get a day by date in week {self.number}, starting on {self.date}, is looking at day {diem}, which is type {type(diem)}')
-            if date == diem.ActivityDay: # Error is here: diem is being treated as a datetime object
-                return diem
+        for key in self.days:
+            day = self.days[key]
+            logging.debug(f'Trying to get a day by date in week {self.number}, starting on {self.date}, is looking at day {day}, which is type {type(day)}')
+            if date == day.ActivityDay:
+                return day
         return -1
 
 class Day:

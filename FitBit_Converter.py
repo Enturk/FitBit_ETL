@@ -108,18 +108,21 @@ class Subject_Record:
             logging.error(f'Subject {self.name} has no weeks, so none can be provided for the date requested.')
             return -1
         delta = difference_days(self.start_date, date)
-        if delta > 52*7 or delta < 0:
+        if delta > 52*7-1 or delta < 0:
             logging.error(f"Date {date} is bad for subject {self.name}, whose timeline starts on {self.start_date}. That would make it {delta} days away.")
             return -1
         week_num = int(delta/7)
-        return self.weeks[week_num]
+        return self.weeks[week_num] # key error when I didn't add the -1 to the if above
 
     def get_day_by_date(self, date):
         delta = difference_days(self.start_date, date)
-        if delta > 52*7 or delta < 0:
-            logging.error(f"Date {date} is bad for subject {self.name}, whose timeline starts on {self.start_date}. That would make it {delta} days away.")
-            return -1
         week = self.get_week_by_date(date)
+        if delta > 52*7 or delta < 0 or week == -1:
+            if week == -1:
+                logging.error(f"Date {date} returned a bad week for subject {self.name}.")
+            else:
+                logging.error(f"Date {date} is bad for subject {self.name}, whose timeline starts on {self.start_date}. That would make it {delta} days away.")
+            return -1
         day_num = int(delta%7)
         logging.debug(f"Trying to get day of week {week.number} for subject {self.name}, and looking for day {day_num} of that week, since we're looking for {date} and day zero was {self.start_date}")
         day = week.get_day_by_date(date)
@@ -190,7 +193,7 @@ class Week:
             return -1
         for key in self.days:
             day = self.days[key]
-            logging.debug(f'Trying to get a day by date in week {self.number}, starting on {self.date}, is looking at day {day}, which is type {type(day)}')
+            # logging.debug(f'Trying to get a day by date in week {self.number}, starting on {self.date}, is looking at day {day}, which is type {type(day)}')
             if date == day.ActivityDay:
                 return day
         return -1

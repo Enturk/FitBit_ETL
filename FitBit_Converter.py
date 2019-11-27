@@ -63,7 +63,7 @@ def CSVtolist(filename):
         input_file = os.path.join(script_dir, filename)
         logging.debug(f'Current input file is {input_file}')
     else:
-        logging.critical(f'Fatal Error: file not found: {filename}')
+        logging.critical(f'Fatal Error: file {filename} in {script_dir}')
         exit()
     with open(filename, 'r') as csvfile:
         return_list = list(csv.reader(csvfile))
